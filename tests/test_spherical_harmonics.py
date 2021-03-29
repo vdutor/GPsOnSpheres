@@ -77,8 +77,6 @@ def test_orthonormal_basis_4d(max_degree):
             )
             inner_products[i, j] = v
 
-    from gpflux.vish.misc import surface_area_sphere
-
     inner_products = inner_products / surface_area_sphere(dimension)
 
     np.testing.assert_array_almost_equal(
@@ -86,7 +84,7 @@ def test_orthonormal_basis_4d(max_degree):
     )
 
 
-@pytest.mark.parametrize("dimension", range(3, 10, 3))
+@pytest.mark.parametrize("dimension", range(3, 11, 3))
 @pytest.mark.parametrize("max_degree", range(2, 7, 3))
 def test_equality_spherical_harmonics_collections(dimension, max_degree):
 
@@ -125,6 +123,19 @@ def test_addition_theorem(dimension, degree):
     np.testing.assert_array_almost_equal(
         np.diag(addition_manual)[..., None], harmonics.addition_at_1(X).numpy()
     )
+
+
+@pytest.mark.parametrize("dimension", range(3, 21))
+def test_init_spherical_harmonics(dimension):
+    max_degree = 2
+    _ = SphericalHarmonics(dimension, max_degree)
+
+
+@pytest.mark.parametrize("dimension", range(21, 25))
+def test_init_spherical_harmonics_not_cached(dimension):
+    max_degree = 2
+    with pytest.raises(ValueError):
+        _ = SphericalHarmonics(dimension, max_degree)
 
 
 def test_building_fundamental_set_shapes():

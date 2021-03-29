@@ -5,13 +5,32 @@ from scipy import linalg, optimize
 from scipy.special import comb as combinations, gegenbauer as ScipyGegenbauer
 
 
+def num_harmonics(dimension: int, degree: int) -> int:
+    r"""
+    Number of spherical harmonics of a particular degree n in
+    d dimensions. Referred to as N(d, n).
+
+    param dimension:
+        S^{d-1} = { x ∈ R^d and ||x||_2 = 1 }
+        For a circle d=2, for a ball d=3
+    param degree: degree of the harmonic
+    """
+    if degree == 0:
+        return 1
+    elif dimension == 3:
+        return int(2 * degree + 1)
+    else:
+        comb = combinations(degree + dimension - 3, degree - 1)
+        return int(np.round((2 * degree + dimension - 2) * comb / degree))
+
+
 class FundamentalSystemCache:
     """A simple cache object to access precomputed fundamental system.
 
     Fundamental system are sets of points that allow the user to evaluate the spherical
     harmonics in an arbitrary dimension"""
 
-    def __init__(self, dimension: int, load_dir="fundamental_system"):
+    def __init__(self, dimension: int, load_dir="fundamental_system", only_use_cache: bool = True):
         self.load_dir = Path(__file__).parents[0] / load_dir
         self.file_name = self.load_dir / f"fs_{dimension}D.npz"
         self.dimension = dimension
@@ -19,6 +38,11 @@ class FundamentalSystemCache:
         if self.file_name.exists():
             with np.load(self.file_name) as data:
                 self.cache = {k: v for (k, v) in data.items()}
+        elif only_use_cache:
+            raise ValueError(
+                f"Fundamental system for dimension {dimension} has not been precomputed."
+                "Terminating computations. Precompute set by running `fundamental_set.py`"
+            )
         else:
             self.cache = {}
 
@@ -112,22 +136,6 @@ def build_fundamental_system(
     return X_system
 
 
-def num_harmonics(dimension: int, degree: int) -> int:
-    r"""Calculate the number of spherical harmonics of a particular degree n in
-    d dimensions. Referred to as N(d, n).
-
-    param dimension:
-        S^{d-1} = { x ∈ R^d and ||x||_2 = 1 }
-        For a circle d=2, for a ball d=3
-    param degree: degree of the harmonic
-    """
-    if degree == 0:
-        return 1
-    else:
-        comb = combinations(degree + dimension - 3, degree - 1)
-        return int(np.round((2 * degree + dimension - 2) * comb / degree))
-
-
 def calculate_decrement_in_determinant(Z, X_system, M_system_chol, gegenbauer):
     r"""Calculate the negative determinant.
 
@@ -202,8 +210,10 @@ if __name__ == "__main__":
 
     def regenerate_cache(dimension: int):
         max_degrees = calc_degrees(dimension, max_harmonics=1000)
-        FundamentalSystemCache(dimension).regenerate_and_save_cache(max_degrees)
+        FundamentalSystemCache(dimension, only_use_cache=False).regenerate_and_save_cache(max_degrees)
 
-    DIMENSIONS = range(3, 20)
-    with Pool(6) as p:
-        p.map(regenerate_cache, DIMENSIONS)
+    # DIMENSIONS = range(3, 20)
+    # with Pool(6) as p:
+    #     p.map(regenerate_cache, DIMENSIONS)
+
+    regenerate_cache(16)

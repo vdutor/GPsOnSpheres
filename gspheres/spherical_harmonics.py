@@ -3,12 +3,12 @@ from typing import Union, List
 
 import numpy as np
 import tensorflow as tf
-from scipy.special import comb, gegenbauer as scipy_gegenbauer
+from scipy.special import gegenbauer as scipy_gegenbauer
 
 from gpflow.base import TensorType
 from gpflow.config import default_float
 
-from gspheres.fundamental_set import FundamentalSystemCache
+from gspheres.fundamental_set import FundamentalSystemCache, num_harmonics
 from gspheres.gegenbauer_polynomial import Gegenbauer
 from gspheres.utils import surface_area_sphere
 
@@ -218,28 +218,3 @@ def eigenvalue_harmonics(
     assert dimension >= 3, "We only support dimensions >= 3"
 
     return degrees * (degrees + dimension - 2)
-
-
-def num_harmonics(dimension: int, degree: int) -> int:
-    r"""
-    Number of spherical harmonics of a particular degree n in
-    d dimensions. Referred to as N(d, n).
-
-    param dimension:
-        S^{d-1} = { x ∈ R^d and ||x||_2 = 1 }
-        For a circle d=2, for a ball d=3
-    param degree: degree of the harmonic
-    """
-    if degree == 0:
-        return 1
-    elif dimension == 3:
-        return int(2 * degree + 1)
-    else:
-        return int(
-            np.round(
-                (2 * degree + dimension - 2)
-                / degree
-                * comb(degree + dimension - 3, degree - 1)
-            )
-        )
-
