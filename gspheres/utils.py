@@ -1,6 +1,3 @@
-from typing import Any, List
-
-import itertools
 import numpy as np
 import tensorflow as tf
 from scipy.special import gamma
