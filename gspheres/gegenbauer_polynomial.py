@@ -1,10 +1,10 @@
 import math
-from typing import List, Union, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 import tensorflow as tf
-from scipy.special import loggamma
 from scipy.special import gegenbauer as scipy_gegenbauer
+from scipy.special import loggamma
 
 from gpflow.base import TensorType
 
@@ -16,7 +16,9 @@ class Polynomial:
     """
 
     def __init__(
-        self, coefficients: Union[List, np.ndarray], powers: Union[List, np.ndarray],
+        self,
+        coefficients: Union[List, np.ndarray],
+        powers: Union[List, np.ndarray],
     ):
         r"""
         The polynomial f(x) is given by f(x) = \sum_i c_i x^{p_i},
@@ -70,7 +72,8 @@ class Gegenbauer(Polynomial):
 
         coefficients, powers = self._compute_coefficients_and_powers(n, alpha)
         super().__init__(
-            np.array(coefficients, dtype=np.float64), np.array(powers, dtype=np.float64),
+            np.array(coefficients, dtype=np.float64),
+            np.array(powers, dtype=np.float64),
         )
         self.n = n
         self.alpha = alpha

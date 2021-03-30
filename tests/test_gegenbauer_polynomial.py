@@ -4,13 +4,12 @@ from functools import reduce
 import numpy as np
 import pytest
 import tensorflow as tf
-from scipy.integrate import quad
-from scipy.special import gegenbauer as scipy_gegenbauer
-from scipy.special import factorial, gamma
-
-from gspheres.utils import surface_area_sphere
-from gspheres.gegenbauer_polynomial import Polynomial, Gegenbauer, GegenbauerScipyCoefficients
+from gspheres.gegenbauer_polynomial import Gegenbauer, GegenbauerScipyCoefficients, Polynomial
 from gspheres.spherical_harmonics import num_harmonics
+from gspheres.utils import surface_area_sphere
+from scipy.integrate import quad
+from scipy.special import factorial, gamma
+from scipy.special import gegenbauer as scipy_gegenbauer
 
 
 def test_polynomial():
@@ -19,11 +18,13 @@ def test_polynomial():
     ps = np.array([3.0, 5.0, 8.0], dtype=np.float64)
 
     np.testing.assert_array_almost_equal(
-        reduce(operator.add, (c * x ** p for c, p in zip(cs, ps))), Polynomial(cs, ps)(x).numpy(),
+        reduce(operator.add, (c * x ** p for c, p in zip(cs, ps))),
+        Polynomial(cs, ps)(x).numpy(),
     )
 
     np.testing.assert_array_almost_equal(
-        cs[0] * x ** ps[0] + cs[1] * x ** ps[1] + cs[2] * x ** ps[2], Polynomial(cs, ps)(x).numpy(),
+        cs[0] * x ** ps[0] + cs[1] * x ** ps[1] + cs[2] * x ** ps[2],
+        Polynomial(cs, ps)(x).numpy(),
     )
 
 
@@ -34,7 +35,8 @@ def test_Gegenbauer(alpha, n, GegenbauerClass):
     x = np.linspace(-1, 1, 1_000).reshape(-1, 1)
 
     np.testing.assert_array_almost_equal(
-        scipy_gegenbauer(n, alpha)(x), GegenbauerClass(n, alpha)(tf.convert_to_tensor(x)).numpy(),
+        scipy_gegenbauer(n, alpha)(x),
+        GegenbauerClass(n, alpha)(tf.convert_to_tensor(x)).numpy(),
     )
 
 

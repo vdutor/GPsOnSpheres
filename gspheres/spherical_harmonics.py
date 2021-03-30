@@ -1,16 +1,15 @@
 """ Spherical Harmonics and associated utility functions """
-from typing import Union, List
+from typing import List, Union
 
 import numpy as np
 import tensorflow as tf
+from gspheres.fundamental_set import FundamentalSystemCache, num_harmonics
+from gspheres.gegenbauer_polynomial import Gegenbauer
+from gspheres.utils import surface_area_sphere
 from scipy.special import gegenbauer as scipy_gegenbauer
 
 from gpflow.base import TensorType
 from gpflow.config import default_float
-
-from gspheres.fundamental_set import FundamentalSystemCache, num_harmonics
-from gspheres.gegenbauer_polynomial import Gegenbauer
-from gspheres.utils import surface_area_sphere
 
 
 class SphericalHarmonics:
@@ -21,7 +20,10 @@ class SphericalHarmonics:
     """
 
     def __init__(
-        self, dimension: int, degrees: Union[int, List[int]], debug: bool = False,
+        self,
+        dimension: int,
+        degrees: Union[int, List[int]],
+        debug: bool = False,
     ):
         """
         :param dimension: if d = dimension, then
@@ -33,9 +35,7 @@ class SphericalHarmonics:
             in the collection (exclusive)
         :param debug: print debug messages.
         """
-        assert (
-            dimension >= 3
-        ), f"Lowest supported dimension is 3, you specified {dimension}"
+        assert dimension >= 3, f"Lowest supported dimension is 3, you specified {dimension}"
         self.debug = debug
 
         if isinstance(degrees, int):
@@ -48,7 +48,10 @@ class SphericalHarmonics:
         ]
 
     @tf.function(input_signature=[tf.TensorSpec(shape=None, dtype=default_float())])
-    def __call__(self, x: TensorType,) -> TensorType:
+    def __call__(
+        self,
+        x: TensorType,
+    ) -> TensorType:
         """
         Evaluates each of the spherical harmonic level in the collection,
         and stacks the results.
@@ -108,9 +111,7 @@ class SphericalHarmonicsLevel:
             For a circle d=2, for a ball d=3
         param degree: degree of the harmonic, also referred to as level.
         """
-        assert (
-            dimension >= 3
-        ), f"Lowest supported dimension is 3, you specified {dimension}"
+        assert dimension >= 3, f"Lowest supported dimension is 3, you specified {dimension}"
         self.dimension, self.degree = dimension, degree
         self.alpha = (self.dimension - 2) / 2.0
         self.num_harmonics_in_level = num_harmonics(self.dimension, self.degree)
@@ -128,9 +129,7 @@ class SphericalHarmonicsLevel:
         self.L_inv = np.linalg.solve(self.L, np.eye(len(self.L)))
         self.gegenbauer = Gegenbauer(self.degree, self.alpha)
 
-    @tf.function(
-        input_signature=[tf.TensorSpec(shape=[None, None], dtype=default_float())]
-    )
+    @tf.function(input_signature=[tf.TensorSpec(shape=[None, None], dtype=default_float())])
     def __call__(self, X: TensorType) -> TensorType:
         r"""
         :param X: M normalised (i.e. unit) D-dimensional vector, [N, D]
@@ -181,9 +180,7 @@ class SphericalHarmonicsLevel:
         :param X: only used for it's X.shape[0], [N, D]
         :return: [N, 1]
         """
-        c = (
-            tf.ones((X.shape[0], 1), dtype=X.dtype) * self.gegenbauer.value_at_1
-        )  # [N, 1]
+        c = tf.ones((X.shape[0], 1), dtype=X.dtype) * self.gegenbauer.value_at_1  # [N, 1]
         return (self.degree / self.alpha + 1.0) * c  # [N, 1]
 
     def eigenvalue(self) -> float:
