@@ -1,3 +1,4 @@
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
@@ -53,10 +54,17 @@ def plot_spherical_function(f, resolution=100, rescale_radius=False, ax=None):
     return ax
 
 
-import plotly.graph_objects as go
+# def cmap_for_plotly(pl_entries):
+#     h = 1.0/(pl_entries-1)
+#     pl_colorscale = []
 
+#     for k in range(pl_entries):
+#         C = map(np.uint8, np.array(cmap(k*h)[:3])*255)
+#         pl_colorscale.append([k*h, 'rgb'+str((C[0], C[1], C[2]))])
 
-def plotly_plot_spherical_function(f, resolution=500, rescale_radius=False):
+#     return pl_colorscale
+
+def plotly_plot_spherical_function(f, resolution=100, rescale_radius=False, rotate=False):
     """
     f is a function which takes a N x 3 matrix of points on the sphere in
     cartesian coordinates, and returns a N, vector.
@@ -88,7 +96,14 @@ def plotly_plot_spherical_function(f, resolution=500, rescale_radius=False):
     surf = go.Surface(x=x, y=y, z=z, surfacecolor=fcolors)  # , colorscale='Viridis')
     fig = go.Figure(surf)
     fig.update_layout(scene_aspectmode="cube")
-    fig.update_traces(showscale=False)
+    fig.update_scenes(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False)
+    fig.update_traces(showscale=False, hoverinfo="none")
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+
+    fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)'
+    )
     fig.update_layout(
         scene=dict(
             xaxis=dict(showbackground=False, showticklabels=False, visible=False),
@@ -97,56 +112,38 @@ def plotly_plot_spherical_function(f, resolution=500, rescale_radius=False):
         )
     )
 
-    x_eye = -1.25
-    y_eye = 2
-    z_eye = 0.5
+    x_eye = 1
+    y_eye = 1
+    z_eye = 1
+    angle = np.pi / 720
 
     fig.update_layout(
         width=600,
         height=600,
         scene_camera_eye=dict(x=x_eye, y=y_eye, z=z_eye),
-        updatemenus=[dict(
-            type="buttons",
-            buttons=[dict(label="Play",
-                          method="animate",
-                          args=[None])])],
-        # updatemenus=[
-        #     dict(
-        #         type="buttons",
-        #         showactive=False,
-        #         y=1,
-        #         x=0.8,
-        #         xanchor="left",
-        #         yanchor="bottom",
-        #         pad=dict(t=45, r=10),
-        #         buttons=[
-        #             dict(
-        #                 label="Play",
-        #                 method="animate",
-        #                 args=[
-        #                     None,
-        #                     dict(
-        #                         frame=dict(duration=5, redraw=True),
-        #                         transition=dict(duration=0),
-        #                         fromcurrent=True,
-        #                         mode="immediate",
-        #                     ),
-        #                 ],
-        #             )
-        #         ],
-        #     )
-        # ],
     )
 
-    def rotate_z(x, y, z, theta):
-        w = x + 1j * y
-        return np.real(np.exp(1j * theta) * w), np.imag(np.exp(1j * theta) * w), z
-
     frames = []
-    for t in np.arange(0, 6.26, 0.1):
-        xe, ye, ze = rotate_z(x_eye, y_eye, z_eye, -t)
-        frames.append(go.Frame(layout=dict(scene_camera_eye=dict(x=xe, y=ye, z=ze))))
 
-    fig.frames = frames
+    def rotate(x, y, z):
+        r, t, z = xyz2rtz(x, y, z)
+        t += angle
+        x, y, z = rtz2xyz(r, t, z)
+        frames.append(go.Frame(layout=dict(scene_camera_eye=dict(x=x, y=y, z=z))))
+        return x, y, z
+
+    def xyz2rtz(x, y, z):
+        return (x ** 2 + y ** 2) ** .5, np.arctan2(y, x), z
+
+    def rtz2xyz(r, t, z):
+        return r * np.cos(t), r * np.sin(t), z
+
+    x, y, z = x_eye, y_eye, z_eye
+
+    if rotate:
+        for i in range(720):
+            print(i)
+            x, y, z = rotate(x, y, z)
+        fig.frames = frames
 
     return fig
