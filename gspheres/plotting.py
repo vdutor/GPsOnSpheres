@@ -1,3 +1,5 @@
+from typing import Callable
+
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
@@ -16,11 +18,17 @@ def spherical_grid(resolution=100):
     return np.vstack([x.flatten(), y.flatten(), z.flatten()]).T
 
 
-def plot_spherical_function(f, resolution=100, rescale_radius=False, ax=None):
+def plot_spherical_function(
+    f: Callable, resolution: int = 100, rescale_radius: bool = False, ax=None
+):
     """
-    f is a function which takes a N x 3 matrix of points on the sphere in
-    cartesian coordinates, and returns a N, vector.
-    Here we construc the cartesian coordinates in a big grid and then plot
+    Use matplotlib to create a 3D plot of a function defined on the sphere.
+
+    :param f: A function which takes a [N, 3] matrix of points on the sphere in
+        cartesian coordinates, and returns a sized [N] vector.
+    :param resolution: Controls the resolution of the grid (larger means finer grid).
+    :param rescale_radius: Slightly modify the radius to depict the function values.
+    :param ax: Matplotlib axis to plot. If `None` (default), a new axis is created.
     """
 
     grid = spherical_grid(resolution)
@@ -55,12 +63,18 @@ def plot_spherical_function(f, resolution=100, rescale_radius=False, ax=None):
 
 
 def plotly_plot_spherical_function(
-    f, use_mesh: bool = True, resolution: int = 100, animate_steps: int = 0
+    f: Callable, use_mesh: bool = True, resolution: int = 100, animate_steps: int = 0
 ):
     """
-    f is a function which takes a N x 3 matrix of points on the sphere in
-    cartesian coordinates, and returns a N, vector.
-    Here we construc the cartesian coordinates in a big grid and then plot
+    Use plotly to create a 3D plot of a function defined on the sphere.
+
+    :param f: A function which takes a [N, 3] matrix of points on the sphere in
+        cartesian coordinates, and returns a sized [N] vector.
+    :param use_mesh: If `True` use a mesh for plotting, otherwise a Surface plot is used.
+    :param resolution: Controls the resolution of the mesh (larger means finer mesh).
+    :param animate_steps: An animation, in which the sphere is rotating
+        `animate_steps` number of steps can be created if setting `animate_steps
+        > 0`. If set to 0 (default), no animation is added to the plot.
     """
 
     if use_mesh:
