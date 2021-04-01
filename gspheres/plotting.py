@@ -62,6 +62,13 @@ def plot_spherical_function(
     return ax
 
 
+def get_mesh_on_sphere(resolution):
+    import meshzoo
+
+    grid, cells = meshzoo.icosa_sphere(resolution)
+    return grid, cells
+
+
 def plotly_plot_spherical_function(
     f: Callable, use_mesh: bool = True, resolution: int = 100, animate_steps: int = 0
 ):
@@ -78,9 +85,7 @@ def plotly_plot_spherical_function(
     """
 
     if use_mesh:
-        import meshzoo
-
-        grid, cells = meshzoo.icosa_sphere(resolution)
+        grid, cells = get_mesh_on_sphere(resolution)
         x, y, z = [grid[:, i] for i in range(3)]
         fgrid = f(grid)
     else:
@@ -96,8 +101,9 @@ def plotly_plot_spherical_function(
         fgrid = f(grid).reshape(resolution, resolution)
 
     # scale the colors
-    fmax, fmin = fgrid.max(), fgrid.min()
-    fcolors = (fgrid - fmin) / (fmax - fmin)
+    # fmax, fmin = fgrid.max(), fgrid.min()
+    # fcolors = (fgrid - fmin) / (fmax - fmin)
+    fcolors = fgrid
 
     C0 = "rgb(31, 119, 180)"
     C1 = "rgb(255, 127, 14)"
@@ -119,7 +125,7 @@ def plotly_plot_spherical_function(
     fig = go.Figure(plot)
     fig.update_layout(scene_aspectmode="cube")
     fig.update_scenes(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False)
-    fig.update_traces(showscale=False, hoverinfo="none")
+    # fig.update_traces(showscale=False, hoverinfo="none")
     fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
 
     fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")

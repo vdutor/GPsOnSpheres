@@ -3,7 +3,7 @@
 
 LIB_NAME = gspheres
 TESTS_NAME = tests
-LINT_NAMES = $(LIB_NAME) $(TESTS_NAME)
+LINT_NAMES = $(LIB_NAME) $(TESTS_NAME) scripts
 TYPE_NAMES = $(LIB_NAME)
 SUCCESS='\033[0;32m'
 UNAME_S = $(shell uname -s)

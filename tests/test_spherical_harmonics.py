@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import tensorflow as tf
 from gspheres.fundamental_set import FundamentalSystemCache, build_fundamental_system
+from gspheres.gegenbauer_polynomial import GegenbauerManualCoefficients
 from gspheres.spherical_harmonics import SphericalHarmonics, SphericalHarmonicsLevel
 from gspheres.utils import spherical_to_cartesian, spherical_to_cartesian_4d, surface_area_sphere
 
@@ -25,7 +26,7 @@ def test_orthonormal_basis_3d(max_degree):
     x_cart = spherical_to_cartesian(x_spherical)
 
     harmonics = SphericalHarmonics(dimension, max_degree)
-    harmonics_at_x = harmonics(x_cart).numpy()  # [M, N^2]
+    harmonics_at_x = tf.transpose(harmonics(x_cart)).numpy()  # [M, N^2]
 
     d_x_spherical = 2 * np.pi ** 2 / num_grid ** 2
     inner_products = (
@@ -58,7 +59,7 @@ def test_orthonormal_basis_4d(max_degree):
     x_cart = spherical_to_cartesian_4d(x_spherical)
 
     harmonics = SphericalHarmonics(dimension, max_degree)
-    harmonics_at_x = harmonics(x_cart).numpy()  # [M, N^3]
+    harmonics_at_x = tf.transpose(harmonics(x_cart)).numpy()  # [M, N^3]
 
     d_x_spherical = 2 * np.pi ** 3 / num_grid ** 3
 
@@ -159,6 +160,12 @@ class SphericalHarmonics2(SphericalHarmonics):
         """
         super().__init__(dimension, degrees, debug)
 
+        # Hack: overwrite levels to use `GegenbauerManualCoefficients`
+        for harmonic in self.harmonic_levels:
+            harmonic.gegenbauer = GegenbauerManualCoefficients(
+                harmonic.gegenbauer.n, harmonic.gegenbauer.alpha
+            )
+
         max_power = int(max(max(h.gegenbauer.powers) for h in self.harmonic_levels))
         self.num_harmonics = sum(len(h) for h in self.harmonic_levels)
 
@@ -200,4 +207,4 @@ class SphericalHarmonics2(SphericalHarmonics):
         VXT = tf.matmul(self.V, X, transpose_b=True)  # [M, N, 1]
         tmp = self.weights[:, None, :] * (VXT[:, :, None] ** self.powers[:, None, :])  # [M, N, P]
         gegenbauer_at_VXT = tf.reduce_sum(tmp, axis=-1)  # [M, N]
-        return self.L_inv.matmul(gegenbauer_at_VXT)  # [M, N]
+        return tf.transpose(self.L_inv.matmul(gegenbauer_at_VXT))  # [N, M]

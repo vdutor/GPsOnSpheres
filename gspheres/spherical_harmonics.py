@@ -57,7 +57,7 @@ class SphericalHarmonics:
         and stacks the results.
         :param x: TensorType, [N, D]
             N points with unit norm in cartesian coordinate system.
-        :return: [num harmonics in collection, N]
+        :return: [N, num harmonics in collection]
         """
         if self.debug:
             print("print: __call__ spherical harmonics")
@@ -67,7 +67,7 @@ class SphericalHarmonics:
             lambda harmonic: harmonic(x), self.harmonic_levels
         )  # List of length `max_degree` with Tensor [num_harmonics_degree, N]
 
-        return tf.concat(list(values), axis=0)  # [num_harmonics, N]
+        return tf.transpose(tf.concat(list(values), axis=0))  # [num_harmonics, N]
 
     def __len__(self):
         return sum(len(harmonic_level) for harmonic_level in self.harmonic_levels)

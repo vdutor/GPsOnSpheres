@@ -47,7 +47,7 @@ class Polynomial:
         return tf.reshape(val, tf.shape(x))
 
 
-class Gegenbauer(Polynomial):
+class GegenbauerManualCoefficients(Polynomial):
     r"""
     Gegenbauer polynomials or ultraspherical polynomials C_n^(α)(x)
     are orthogonal polynomials on the interval [−1,1] with respect
@@ -123,9 +123,27 @@ class GegenbauerScipyCoefficients:
     """Gegenbauer polynomial using the coefficients given by Scipy."""
 
     def __init__(self, n: int, alpha: float):
+        self.n = n
+        self.alpha = alpha
         C = scipy_gegenbauer(n, alpha)
         self._at_1 = C(1.0)
         self.coefficients = list(C.coefficients)
 
     def __call__(self, x: TensorType) -> TensorType:
+        """ x: [...], return [...] """
+        if self.n < 0:
+            return tf.zeros_like(x)
+        elif self.n == 0:
+            return tf.ones_like(x)
+        elif self.n == 1:
+            return 2 * self.alpha * x
+
         return tf.math.polyval(self.coefficients, x)
+
+    @property
+    def value_at_1(self):
+        """ Gegenbauer evaluated at 1.0 """
+        return self._at_1
+
+
+Gegenbauer = GegenbauerManualCoefficients

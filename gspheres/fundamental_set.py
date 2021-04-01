@@ -35,6 +35,7 @@ class FundamentalSystemCache:
         self.load_dir = Path(__file__).parents[0] / load_dir
         self.file_name = self.load_dir / f"fs_{dimension}D.npz"
         self.dimension = dimension
+        self.only_use_cache = only_use_cache
 
         if self.file_name.exists():
             with np.load(self.file_name) as data:
@@ -55,8 +56,16 @@ class FundamentalSystemCache:
         """Load or calculate the set for given degree"""
         key = self.cache_key(degree)
         if key not in self.cache:
-            print("WARNING: Cache miss - calculating  system")
-            self.cache[key] = self.calculate(self.dimension, degree)
+            if self.only_use_cache:
+                raise ValueError(
+                    f"Fundamental system for dimension {self.dimension} and degree "
+                    f"{degree} has not been precomputed. Terminating "
+                    "computations. Precompute set by running `fundamental_set.py`"
+                )
+            else:
+                print("WARNING: Cache miss - calculating  system")
+                self.cache[key] = self.calculate(self.dimension, degree)
+
         return self.cache[key]
 
     def regenerate_and_save_cache(self, max_degrees: int) -> None:
