@@ -231,7 +231,7 @@ gpflow.set_trainable(m.inducing_variable, False)
 
 opt = gpflow.optimizers.Scipy()
 opt.minimize(
-    m.training_loss_closure(data), m.trainable_variables
+    m.training_loss_closure(data, compile=False), m.trainable_variables, compile=False
 )
 
 print(f'ELBO: {m.elbo(data).numpy().item()}')
