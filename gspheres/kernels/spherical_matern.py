@@ -19,6 +19,8 @@ class SphericalMatern(gpflow.kernels.Kernel):
         assert nu in [1 / 2, 3 / 2, 5 / 2]
         assert dimension == 3
 
+        super().__init__()
+
         self.normalisation_constant = 40.0
         self.dimension = dimension
         self.alpha = (dimension - 2) / 2
