@@ -21,8 +21,8 @@ def map_to_sphere(X: np.ndarray, bias: Union[int, float]) -> np.ndarray:
 
     X is [N, D]
     """
-    Xb = np.concatenate((X, bias * np.ones((*X.shape, 1))))
-    return Xb / np.linalg.norm(Xb, axis=1)
+    Xb = np.concatenate((X, bias * np.ones((*X.shape[:-1], 1))), axis=1)
+    return Xb / np.linalg.norm(Xb, axis=1, keepdims=True)
 
 
 # Define InducingVariables
