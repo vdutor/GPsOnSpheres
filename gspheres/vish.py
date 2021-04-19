@@ -70,6 +70,8 @@ def prior_kl_vish(inducing_variable, kernel, q_mu, q_sqrt, whiten=False):
 
 def gauss_kl_vish(q_mu, q_sqrt, K):
     """
+    Author: ST--
+    Source: GPflow notebook on variational Fourier features.
     Compute the KL divergence from
 
           q(x) = N(q_mu, q_sqrt^2)
@@ -226,4 +228,3 @@ class WsabiLSVGP(SVGP):
             f_sq_var = var * mean ** 2
 
         return f_sq_mean, f_sq_var
-
