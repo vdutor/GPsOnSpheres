@@ -11,8 +11,10 @@ from gpflow.models.model import MeanAndVariance
 from gpflow.models.training_mixins import InputData
 from gpflow.utilities import to_default_float
 
+from gspheres.fundamental_set import num_harmonics
 from gspheres.kernels.spherical_matern import SphericalMatern
 from gspheres.spherical_harmonics import SphericalHarmonics
+from gspheres.utils import chain
 
 
 def map_to_sphere(X: np.ndarray, bias: Union[int, float]) -> np.ndarray:
@@ -29,6 +31,8 @@ def map_to_sphere(X: np.ndarray, bias: Union[int, float]) -> np.ndarray:
 class SphericalHarmonicFeatures(InducingVariables):
     """Wraps SphericalHarmonics."""
     def __init__(self, dimension, degrees):
+        self.dimension = dimension
+        self.max_degree = degrees
         self.spherical_harmonics = SphericalHarmonics(dimension, degrees)
 
     def __len__(self):
@@ -43,7 +47,12 @@ def Kuu_sphericalmatern_sphericalharmonicfeatures(
         jitter=None
 ):
     """Covariance matrix between spherical harmonic features."""
-    eigenvalues = kernel.eigenvalues(len(inducing_variable))
+    eigenvalues_per_level = kernel.eigenvalues(inducing_variable.max_degree)
+    num_harmonics_per_level = tf.convert_to_tensor([
+        num_harmonics(inducing_variable.dimension, n)
+        for n in range(inducing_variable.max_degree)
+    ])
+    eigenvalues = chain(eigenvalues_per_level, num_harmonics_per_level)
     return tf.linalg.LinearOperatorDiag(1 / eigenvalues)
 
 
@@ -56,6 +65,8 @@ def Kuf_sphericalmatern_sphericalharmonicfeatures(
     """
     Covariance between spherical harmonic features and function values.
 
+    Returns num of inducing variables (rows) by num of points in X
+    (cols).
     """
     return tf.transpose(inducing_variable.spherical_harmonics(X))
 
