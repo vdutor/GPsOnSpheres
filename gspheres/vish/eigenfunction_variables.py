@@ -6,14 +6,20 @@ from gpflow import kullback_leiblers as kl
 from gpflow.base import TensorLike
 from gpflow.utilities import to_default_float
 
+from gspheres.fundamental_set import num_harmonics
 from gspheres.kernels.spherical_matern import SphericalMatern
 from gspheres.spherical_harmonics import SphericalHarmonics
 
 
 # Define InducingVariables
+from gspheres.utils import chain
+
+
 class SphericalHarmonicFeatures(InducingVariables):
     """Wraps SphericalHarmonics."""
     def __init__(self, dimension, degrees):
+        self.dimension = dimension
+        self.max_degree = degrees
         self.spherical_harmonics = SphericalHarmonics(dimension, degrees)
 
     def __len__(self):
@@ -28,7 +34,12 @@ def Kuu_sphericalmatern_sphericalharmonicfeatures(
         jitter=None
 ):
     """Covariance matrix between spherical harmonic features."""
-    eigenvalues = kernel.eigenvalues(len(inducing_variable))
+    eigenvalues_per_level = kernel.eigenvalues(inducing_variable.max_degree)
+    num_harmonics_per_level = tf.convert_to_tensor([
+        num_harmonics(inducing_variable.dimension, n)
+        for n in range(inducing_variable.max_degree)
+    ])
+    eigenvalues = chain(eigenvalues_per_level, num_harmonics_per_level)
     return tf.linalg.LinearOperatorDiag(1 / eigenvalues)
 
 

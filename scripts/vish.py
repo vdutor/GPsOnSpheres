@@ -53,4 +53,4 @@ opt.minimize(
     options=dict(maxiter=100)
 )
 
-print(f'Eigenfunction ELBO: {m.elbo(data).numpy().item()}')
+print(f'ELBO: {m.elbo(data).numpy().item()}')
