@@ -7,17 +7,13 @@ from gpflow.base import TensorLike
 from gpflow.utilities import to_default_float
 
 from gspheres.fundamental_set import num_harmonics
-from gspheres.kernels.spherical_matern import SphericalMatern
 from gspheres.spherical_harmonics import SphericalHarmonics
-
-
-# Define InducingVariables
 from gspheres.utils import chain
 
 
 class SphericalHarmonicFeatures(InducingVariables):
     """Wraps SphericalHarmonics."""
-    def __init__(self, dimension, degrees):
+    def __init__(self, dimension: int, degrees: int):
         self.dimension = dimension
         self.max_degree = degrees
         self.spherical_harmonics = SphericalHarmonics(dimension, degrees)
@@ -27,7 +23,7 @@ class SphericalHarmonicFeatures(InducingVariables):
         return len(self.spherical_harmonics)
 
 
-@cov.Kuu.register(SphericalHarmonicFeatures, SphericalMatern)
+@cov.Kuu.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel)
 def Kuu_sphericalmatern_sphericalharmonicfeatures(
         inducing_variable,
         kernel,
@@ -41,9 +37,10 @@ def Kuu_sphericalmatern_sphericalharmonicfeatures(
     ])
     eigenvalues = chain(eigenvalues_per_level, num_harmonics_per_level)
     return tf.linalg.LinearOperatorDiag(1 / eigenvalues)
+    # return tf.linalg.diag(1 / eigenvalues)
 
 
-@cov.Kuf.register(SphericalHarmonicFeatures, SphericalMatern, TensorLike)
+@cov.Kuf.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel, TensorLike)
 def Kuf_sphericalmatern_sphericalharmonicfeatures(
         inducing_variable,
         kernel,
@@ -56,7 +53,7 @@ def Kuf_sphericalmatern_sphericalharmonicfeatures(
     return tf.transpose(inducing_variable.spherical_harmonics(X))
 
 
-@kl.prior_kl.register(SphericalHarmonicFeatures, SphericalMatern, TensorLike, TensorLike)
+@kl.prior_kl.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel, TensorLike, TensorLike)
 def prior_kl_vish(inducing_variable, kernel, q_mu, q_sqrt, whiten=False):
     if whiten:
         raise NotImplementedError

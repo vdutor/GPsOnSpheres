@@ -12,8 +12,10 @@ from ..utils import surface_area_sphere
 
 
 class ChordMatern(gpflow.kernels.Kernel):
-    def __init__(self, nu: int, dimension: int):
-        assert dimension == 3
+    def __init__(self, nu: float, dimension: int):
+        # assert dimension == 3
+
+        super().__init__()
 
         if nu == 1 / 2:
             self.base_kernel = gpflow.kernels.Matern12()
@@ -23,7 +25,7 @@ class ChordMatern(gpflow.kernels.Kernel):
             self.base_kernel = gpflow.kernels.Matern52()
 
         self.dimension = dimension
-        self.base_kernel.lengthscales = 1.0
+        # self.base_kernel.lengthscales = 1.0
 
     def shape_function_cos_theta(self, t: TensorType) -> TensorType:
         r"""
@@ -42,6 +44,10 @@ class ChordMatern(gpflow.kernels.Kernel):
     @property
     def variance(self):
         return self.base_kernel.variance
+
+    @property
+    def lengthscales(self):
+        return self.base_kernel.lengthscales
 
     def K(self, X: TensorType, X2: Optional[TensorType] = None) -> tf.Tensor:
         return self.base_kernel.K(X, X2)
