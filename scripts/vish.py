@@ -79,16 +79,8 @@ if MODEL == 'SGPR':
 
 # Set up optimiser and variables to optimise.
 opt = gpflow.optimizers.Scipy()
-if 'SVGP' in MODEL:
-    # gpflow.set_trainable(m.kernel, False)
-    gpflow.set_trainable(m.kernel.lengthscales, False)
-    # gpflow.set_trainable(m.likelihood, False)
-    gpflow.set_trainable(m.inducing_variable, False)
-else:
-    # gpflow.set_trainable(m.kernel, False)
-    gpflow.set_trainable(m.kernel.lengthscales, False)
-    # gpflow.set_trainable(m.likelihood, False)
-    gpflow.set_trainable(m.inducing_variable, False)
+gpflow.set_trainable(m.inducing_variable, False)
+if 'SGPR' in MODEL:
     gpflow.set_trainable(m.q_mu, False)
     gpflow.set_trainable(m.q_sqrt, False)
 # Optimise.
