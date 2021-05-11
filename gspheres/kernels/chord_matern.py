@@ -6,7 +6,7 @@ from scipy import integrate
 from scipy.special import gegenbauer as scipy_gegenbauer
 
 import gpflow
-from gpflow.base import TensorType
+from gpflow.base import TensorType, Parameter
 
 from ..utils import surface_area_sphere
 
@@ -27,11 +27,13 @@ class ChordMatern(gpflow.kernels.Kernel):
         self.dimension = dimension
         # self.base_kernel.lengthscales = 1.0
 
-    def shape_function_cos_theta(self, t: TensorType) -> TensorType:
+    def shape_function_cos_theta(
+            self, t: TensorType, lengthscale: tf.Variable
+    ) -> TensorType:
         r"""
         shape_function: [-1, 1] -> [-\infty, 1] with k(0) = 1
         """
-        r2 = 2.0 * (1.0 - t) / tf.square(self.lengthscales)
+        r2 = 2.0 * (1.0 - t) / tf.square(lengthscale)
         return self.base_kernel.K_r2(tf.cast(r2, tf.float64))
 
     def eigenvalues(self, max_degree: int) -> tf.Tensor:
@@ -71,7 +73,12 @@ class ChordMatern(gpflow.kernels.Kernel):
         return self.base_kernel.K_diag(X)
 
 
-def _funk_hecke(shape_function: Callable[[float], float], n: int, dim: int, lengthscale: tf.Variable) -> Tuple[float, float]:
+def _funk_hecke(
+        shape_function: Callable[[float, tf.Variable], float],
+        n: int,
+        dim: int,
+        lengthscale: Parameter
+) -> Tuple[float, float]:
     r"""
     Implements Funk-Hecke [see 1] where we integrate over the sphere of dim-1
     living in \Re^dim.
@@ -93,16 +100,17 @@ def _funk_hecke(shape_function: Callable[[float], float], n: int, dim: int, leng
     alpha = (dim - 2.0) / 2.0
     C = scipy_gegenbauer(n, alpha)
     C_1 = C(1.0)
+    lengthscale_variable = tf.Variable(tf.constant(lengthscale.numpy()))
 
     def integrand(t: float) -> float:
-        return shape_function(t) * C(t) * (1.0 - t ** 2) ** (alpha - 0.5)
+        return shape_function(t, lengthscale_variable) * C(t) * (1.0 - t ** 2) ** (alpha - 0.5)
     v = integrate.quad(integrand, -1.0, 1.0)[0]
 
     def dl_integrand(t: float) -> float:
         with tf.GradientTape(watch_accessed_variables=False) as tape:
-            tape.watch(lengthscale.variables)
-            sf = shape_function(t)
-        sf_dl = tape.gradient(sf, lengthscale.variables)
+            tape.watch(lengthscale_variable)
+            sf = shape_function(t, lengthscale_variable)
+        sf_dl = tape.gradient(sf, lengthscale_variable)
         return sf_dl * sf * C(t) * (1.0 - t ** 2) ** (alpha - 0.5)
     dv_dl = integrate.quad(dl_integrand, -1.0, 1.0)[0]
 
