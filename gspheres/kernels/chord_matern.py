@@ -37,25 +37,18 @@ class ChordMatern(gpflow.kernels.Kernel):
         return self.base_kernel.K_r2(tf.cast(r2, tf.float64))
 
     def eigenvalues(self, max_degree: int) -> tf.Tensor:
-        @tf.custom_gradient
-        def eigenvalues_dlengthscale(lengthscale):
-            """Enables automatic differentiation wrt lengthscale."""
-            values = []
-            derivatives = []
-            for n in range(max_degree):
-                v, dvdl = _funk_hecke(
-                    self.shape_function_cos_theta,
-                    n,
-                    self.dimension,
-                    lengthscale
-                )
-                values.append(v)
-                derivatives.append(dvdl)
-            def gradient(upstream_derivative):
-                return upstream_derivative * tf.convert_to_tensor(dvdl)
-            return tf.convert_to_tensor(values), gradient
-        return eigenvalues_dlengthscale(self.lengthscales)
-
+        values = []
+        for n in range(max_degree):
+            v = _funk_hecke(
+                self.shape_function_cos_theta,
+                n,
+                self.dimension,
+                variance=self.variance,
+                lengthscales=self.lengthscales
+            )
+            values.append(tf.reshape(v, shape=[-1]))
+        return tf.concat(values, axis=0)
+        # return tf.convert_to_tensor(values)
 
     @property
     def variance(self):
@@ -77,7 +70,8 @@ def _funk_hecke(
         shape_function: Callable[[float, tf.Variable], float],
         n: int,
         dim: int,
-        lengthscale: Parameter
+        variance: Parameter,
+        lengthscales: Parameter
 ) -> Tuple[float, float]:
     r"""
     Implements Funk-Hecke [see 1] where we integrate over the sphere of dim-1
@@ -96,22 +90,33 @@ def _funk_hecke(
     :param dim: x, x' in \Re^dim
     """
     assert dim >= 3, "Sphere needs to be at least S^2."
+    assert len(lengthscales.shape) == 0, "ChordMatern kernels can only have one lengthscale"
     omega_d = surface_area_sphere(dim - 1) / surface_area_sphere(dim)
     alpha = (dim - 2.0) / 2.0
     C = scipy_gegenbauer(n, alpha)
     C_1 = C(1.0)
-    lengthscale_variable = tf.Variable(tf.constant(lengthscale.numpy()))
 
-    def integrand(t: float) -> float:
-        return shape_function(t, lengthscale_variable) * C(t) * (1.0 - t ** 2) ** (alpha - 0.5)
-    v = integrate.quad(integrand, -1.0, 1.0)[0]
+    @tf.custom_gradient
+    def integrate_tf(variance, lengthscales):
+        lengthscale_variable = tf.constant(lengthscales.numpy())
+        def integrand(t: float) -> float:
+            return shape_function(t, lengthscale_variable) * C(t) * (1.0 - t ** 2) ** (alpha - 0.5)
+        integral = integrate.quad(integrand, -1.0, 1.0)[0]
+        def grad_fn(upstream, variables=None):
+            def dl_integrand(t: float) -> float:
+                with tf.GradientTape(watch_accessed_variables=False) as tape:
+                    tape.watch(lengthscale_variable)
+                    sf = shape_function(t, lengthscale_variable)
+                sf_dl = tape.gradient(sf, lengthscale_variable)
+                return sf_dl * C(t) * (1.0 - t ** 2) ** (alpha - 0.5)
+            dint_dl = tf.convert_to_tensor(integrate.quad(dl_integrand, -1.0, 1.0)[0], dtype=tf.float64)
+            dint_dv = tf.convert_to_tensor(integral, dtype=tf.float64)
+            return (
+                (upstream * dint_dv, upstream * dint_dl),
+                len(variables) * [None]
+            )
+        return tf.convert_to_tensor(integral, dtype=tf.float64), grad_fn
 
-    def dl_integrand(t: float) -> float:
-        with tf.GradientTape(watch_accessed_variables=False) as tape:
-            tape.watch(lengthscale_variable)
-            sf = shape_function(t, lengthscale_variable)
-        sf_dl = tape.gradient(sf, lengthscale_variable)
-        return sf_dl * sf * C(t) * (1.0 - t ** 2) ** (alpha - 0.5)
-    dv_dl = integrate.quad(dl_integrand, -1.0, 1.0)[0]
+    integral = integrate_tf(variance, lengthscales)
 
-    return v * omega_d / C_1, dv_dl * omega_d / C_1
+    return integral * omega_d / C_1
