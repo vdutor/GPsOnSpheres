@@ -27,6 +27,7 @@ class SphericalMatern(gpflow.kernels.Kernel):
         self.nu = nu
         self.truncation_level = truncation_level  # = L
         self.Cs = [Gegenbauer(n, self.alpha) for n in range(self.truncation_level)]
+        self.lengthscales = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
 
         _eigenvals = self.eigenvalues(self.truncation_level)
         self.constants = tf.convert_to_tensor(
@@ -42,6 +43,15 @@ class SphericalMatern(gpflow.kernels.Kernel):
             ]
         )  # scalar
         self.variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+        self._training = True
+
+    @property
+    def training(self):
+        return self._training
+
+    @training.setter
+    def training(self, flag: bool):
+        self._training = flag
 
     def eigenvalues(self, max_degree: int):
         ns = tf.convert_to_tensor(np.arange(max_degree), dtype=gpflow.default_float())
@@ -79,7 +89,7 @@ class SphericalMatern(gpflow.kernels.Kernel):
 
         :return: Tensor [N, 1]
         """
-        lengthscale = 1.0
+        lengthscale = self.lengthscales
         D = self.dimension
         nu = self.nu
 

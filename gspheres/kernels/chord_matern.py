@@ -25,7 +25,24 @@ class ChordMatern(gpflow.kernels.Kernel):
             self.base_kernel = gpflow.kernels.Matern52()
 
         self.dimension = dimension
-        # self.base_kernel.lengthscales = 1.0
+        self._training = True
+        self._eigenvalues = {}
+
+    @property
+    def training(self):
+        return self._training
+
+    @training.setter
+    def training(self, flag: bool):
+        self._training = flag
+
+    @property
+    def variance(self):
+        return self.base_kernel.variance
+
+    @property
+    def lengthscales(self):
+        return self.base_kernel.lengthscales
 
     def shape_function_cos_theta(
             self, t: TensorType, lengthscale: tf.Variable
@@ -36,7 +53,7 @@ class ChordMatern(gpflow.kernels.Kernel):
         r2 = 2.0 * (1.0 - t) / tf.square(lengthscale)
         return self.base_kernel.K_r2(tf.cast(r2, tf.float64))
 
-    def eigenvalues(self, max_degree: int) -> tf.Tensor:
+    def _compute_eigenvalues(self, max_degree: int) -> tf.Tensor:
         values = []
         for n in range(max_degree):
             v = _funk_hecke(
@@ -48,15 +65,20 @@ class ChordMatern(gpflow.kernels.Kernel):
             )
             values.append(tf.reshape(v, shape=[-1]))
         return tf.concat(values, axis=0)
-        # return tf.convert_to_tensor(values)
 
-    @property
-    def variance(self):
-        return self.base_kernel.variance
-
-    @property
-    def lengthscales(self):
-        return self.base_kernel.lengthscales
+    def eigenvalues(self, max_degree: int) -> tf.Tensor:
+        if self.training:
+            # Make sure cache is empty, as lengthscale and variance are
+            # about to be updated.
+            self._eigenvalues = {}
+            return self._compute_eigenvalues(max_degree)
+        else:
+            # self._eigenvalues is a dictionary (that functions as a cache)
+            if max_degree not in self._eigenvalues:
+                self._eigenvalues[max_degree] = self._compute_eigenvalues(
+                    max_degree
+                )
+            return self._eigenvalues[max_degree]
 
     def K(self, X: TensorType, X2: Optional[TensorType] = None) -> tf.Tensor:
         return self.base_kernel.K(X, X2)
@@ -110,7 +132,7 @@ def _funk_hecke(
                 sf_dl = tape.gradient(sf, lengthscale_variable)
                 return sf_dl * C(t) * (1.0 - t ** 2) ** (alpha - 0.5)
             dint_dl = tf.convert_to_tensor(integrate.quad(dl_integrand, -1.0, 1.0)[0], dtype=tf.float64)
-            dint_dv = tf.convert_to_tensor(integral, dtype=tf.float64)
+            dint_dv = tf.convert_to_tensor(integral, dtype=tf.float64) / variance
             return (
                 (upstream * dint_dv, upstream * dint_dl),
                 len(variables) * [None]
