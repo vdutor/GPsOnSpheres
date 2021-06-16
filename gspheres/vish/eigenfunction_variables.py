@@ -48,8 +48,8 @@ def Kuf_sphericalmatern_sphericalharmonicfeatures(
 ):
     """
     Covariance between spherical harmonic features and function values.
-
     """
+
     return tf.transpose(inducing_variable.spherical_harmonics(X))
 
 

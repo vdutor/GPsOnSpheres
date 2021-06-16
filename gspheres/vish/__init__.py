@@ -28,14 +28,6 @@ class WsabiLSVGP(SVGP):
         super().__init__(*args, **kwargs)
         self.alpha = alpha
 
-    @property
-    def training(self):
-        return self.kernel.training
-
-    @training.setter
-    def training(self, flag: bool):
-        self.kernel.training = flag
-
     def predict_unwarped_f(
             self, Xnew: InputData, full_cov=False, full_output_cov=False
     ) -> MeanAndVariance:
@@ -57,14 +49,6 @@ class LogMSVGP(SVGP):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-    @property
-    def training(self):
-        return self.kernel.training
-
-    @training.setter
-    def training(self, flag: bool):
-        self.kernel.training = flag
 
     def predict_unwarped_f(
             self,

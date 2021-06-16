@@ -27,14 +27,9 @@ class ChordMatern(gpflow.kernels.Kernel):
         self.dimension = dimension
         self._training = True
         self._eigenvalues = {}
-
-    @property
-    def training(self):
-        return self._training
-
-    @training.setter
-    def training(self, flag: bool):
-        self._training = flag
+        self._cache_parameters = {
+            'variance': self.variance, 'lengthscales': self.lengthscales
+        }
 
     @property
     def variance(self):
@@ -66,25 +61,38 @@ class ChordMatern(gpflow.kernels.Kernel):
             values.append(tf.reshape(v, shape=[-1]))
         return tf.concat(values, axis=0)
 
-    def eigenvalues(self, max_degree: int) -> tf.Tensor:
-        if self.training:
-            # Make sure cache is empty, as lengthscale and variance are
-            # about to be updated.
-            self._eigenvalues = {}
-            return self._compute_eigenvalues(max_degree)
-        else:
-            # self._eigenvalues is a dictionary (that functions as a cache)
-            if max_degree not in self._eigenvalues:
-                self._eigenvalues[max_degree] = self._compute_eigenvalues(
-                    max_degree
+    def verify_eigenvalue_cache(self):
+        """Check that lengthscale and variance have not been changed.
+
+        If they have been changed, clear the cache.
+        """
+        variance = self.variance.numpy().item()
+        lengthscale = self.lengthscales.numpy().item()
+        if self._cache_parameters['variance'] != variance:
+            for max_degree in self._eigenvalues:
+                self._eigenvalues[max_degree] *= (
+                        self.variance / self._cache_parameters['variance']
                 )
-            return self._eigenvalues[max_degree]
+        if self._cache_parameters['lengthscales'] != lengthscale:
+            self._eigenvalues = {}
+        self._cache_parameters['variance'] = variance
+        self._cache_parameters['lengthscales'] = lengthscale
+
+    def eigenvalues(self, max_degree: int) -> tf.Tensor:
+        self.verify_eigenvalue_cache()
+        if max_degree not in self._eigenvalues:
+            self._eigenvalues[max_degree] = self._compute_eigenvalues(
+                max_degree
+            )
+        return self._eigenvalues[max_degree]
 
     def K(self, X: TensorType, X2: Optional[TensorType] = None) -> tf.Tensor:
+        # TODO: Refactor in terms of truncated Mercer decomposition.
         return self.base_kernel.K(X, X2)
 
     def K_diag(self, X: TensorType) -> tf.Tensor:
         """ Approximate the true kernel by an inner product between feature functions. """
+        # TODO: Refactor in terms of truncated Mercer decomposition.
         return self.base_kernel.K_diag(X)
 
 
