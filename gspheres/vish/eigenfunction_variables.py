@@ -37,19 +37,17 @@ def Kuu_sphericalmatern_sphericalharmonicfeatures(
     ])
     eigenvalues = chain(eigenvalues_per_level, num_harmonics_per_level)
     return tf.linalg.LinearOperatorDiag(1 / eigenvalues)
-    # return tf.linalg.diag(1 / eigenvalues)
 
 
 @cov.Kuf.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel, TensorLike)
 def Kuf_sphericalmatern_sphericalharmonicfeatures(
-        inducing_variable,
-        kernel,
-        X
+        inducing_variable: SphericalHarmonicFeatures,
+        kernel: gpflow.kernels.Kernel,
+        X: TensorLike
 ):
     """
     Covariance between spherical harmonic features and function values.
     """
-
     return tf.transpose(inducing_variable.spherical_harmonics(X))
 
 
