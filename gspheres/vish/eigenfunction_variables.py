@@ -25,8 +25,8 @@ class SphericalHarmonicFeatures(InducingVariables):
 
 @cov.Kuu.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel)
 def Kuu_sphericalmatern_sphericalharmonicfeatures(
-        inducing_variable,
-        kernel,
+        inducing_variable: SphericalHarmonicFeatures,
+        kernel: gpflow.kernels.Kernel,
         jitter=None
 ):
     """Covariance matrix between spherical harmonic features."""
