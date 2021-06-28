@@ -1,10 +1,11 @@
-from gpflow.inducing_variables import InducingVariables
-
 from gspheres.spherical_harmonics import SphericalHarmonics
+
+from gpflow.inducing_variables import InducingVariables
 
 
 class SphericalHarmonicFeatures(InducingVariables):
     """Wraps SphericalHarmonics."""
+
     def __init__(self, dimension: int, degrees: int):
         self.dimension = dimension
         self.max_degree = degrees

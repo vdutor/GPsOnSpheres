@@ -1,41 +1,36 @@
 import tensorflow as tf
-import gpflow
-from gpflow.inducing_variables import InducingVariables
-from gpflow import covariances as cov
-from gpflow import kullback_leiblers as kl
-from gpflow.base import TensorLike
-from gpflow.utilities import to_default_float
-
 from gspheres.fundamental_set import num_harmonics
 from gspheres.utils import chain
 from gspheres.vish import SphericalHarmonicFeatures
 
+import gpflow
+from gpflow import covariances as cov
+from gpflow import kullback_leiblers as kl
+from gpflow.base import TensorLike
+from gpflow.inducing_variables import InducingVariables
+from gpflow.utilities import to_default_float
+
 
 @cov.Kuu.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel)
 def Kuu_sphericalmatern_sphericalharmonicfeatures(
-        inducing_variable: SphericalHarmonicFeatures,
-        kernel: gpflow.kernels.Kernel,
-        jitter=None
+    inducing_variable: SphericalHarmonicFeatures, kernel: gpflow.kernels.Kernel, jitter=None
 ):
     """Covariance matrix between spherical harmonic features."""
     eigenvalues_per_level = kernel.eigenvalues(inducing_variable.max_degree)
-    num_harmonics_per_level = ([
-        num_harmonics(inducing_variable.dimension, n)
-        for n in range(inducing_variable.max_degree)
-    ])
+    num_harmonics_per_level = [
+        num_harmonics(inducing_variable.dimension, n) for n in range(inducing_variable.max_degree)
+    ]
     eigenvalues = chain(eigenvalues_per_level, num_harmonics_per_level)
     return tf.linalg.LinearOperatorDiag(1 / eigenvalues)
 
 
 @cov.Kuf.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel, TensorLike)
 def Kuf_sphericalmatern_sphericalharmonicfeatures(
-        inducing_variable: SphericalHarmonicFeatures,
-        kernel: gpflow.kernels.Kernel,
-        X: TensorLike
+    inducing_variable: SphericalHarmonicFeatures, kernel: gpflow.kernels.Kernel, X: TensorLike
 ):
     """
     Covariance between spherical harmonic features and function values.
-    
+
     :return: Covariance matrix, shape [Num_features, Num_X].
     """
     return tf.transpose(inducing_variable.spherical_harmonics(X))
@@ -75,8 +70,7 @@ def gauss_kl_vish(q_mu, q_sqrt, K):
     num_latent_gps = to_default_float(tf.shape(q_mu)[1])
     logdet_prior = num_latent_gps * K.log_abs_determinant()
 
-    product_of_dimensions__int = tf.reduce_prod(
-        tf.shape(q_sqrt)[:-1])  # dimensions are integers
+    product_of_dimensions__int = tf.reduce_prod(tf.shape(q_sqrt)[:-1])  # dimensions are integers
     constant_term = to_default_float(product_of_dimensions__int)
 
     Lq = tf.linalg.band_part(q_sqrt, -1, 0)  # force lower triangle
@@ -122,12 +116,16 @@ def conditional_vish(
        f :: M x K, K = 1
        q_sqrt :: K x M x M, with K = 1
     """
-    Xnew = tf.concat([Xnew, tf.ones_like(Xnew[:, :1])], axis=1)
-    tf.ensure_shape(Xnew, [None, kernel.dimension])
+    tf.ensure_shape(Xnew, [None, kernel.dimension - 1])
+    Xnew = tf.concat(
+        [
+            (kernel.weight_variances ** 0.5) * Xnew,
+            (kernel.bias_variance ** 0.5) * tf.ones_like(Xnew[:, :1]),
+        ],
+        axis=1,
+    )
     r = tf.linalg.norm(Xnew, axis=1, keepdims=True)
     Xnew = Xnew / r
-    # Xnew = Xnew / kernel.lengthscales
-
 
     if full_output_cov:
         raise NotImplementedError
@@ -188,8 +186,8 @@ def conditional_vish(
     fvar = tf.transpose(fvar)  # N x K or N x N x K
 
     if not full_cov:
-        fvar = r**2 * fvar
+        fvar = r ** 2 * fvar
     else:
         fvar = r[..., None] * fvar * r[:, None, :]
 
-    return r * fmean, fvar
+    return r * fmean, kernel.variance * fvar

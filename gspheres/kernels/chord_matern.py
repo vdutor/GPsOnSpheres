@@ -20,13 +20,14 @@ class ChordMatern(gpflow.kernels.Kernel):
         elif nu == 5 / 2:
             self.base_kernel = gpflow.kernels.Matern52()
 
-        # self.bias_variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
-        # self.weight_variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+        self.variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+        self.bias_variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+        self.weight_variances = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
         self._eigenvalues = {}
         self.dimension = dimension
         # un-parameterise the kernel's lengthscale
         self.base_kernel.lengthscales = 1.0
-        self.base_kernel.variance = tf.cast(1.0, tf.float64)
+        self.base_kernel.variance = tf.cast(1.0, gpflow.config.default_float())
 
     def shape_function_cos_theta(self, t: TensorType) -> TensorType:
         r"""
@@ -43,14 +44,6 @@ class ChordMatern(gpflow.kernels.Kernel):
                 values.append(v)
             self._eigenvalues[max_degree] = tf.convert_to_tensor(values)
         return self._eigenvalues[max_degree]
-
-    @property
-    def variance(self):
-        return self.base_kernel.variance
-
-    @property
-    def lengthscales(self):
-        return self.base_kernel.lengthscales
 
     def K(self, X: TensorType, X2: Optional[TensorType] = None) -> tf.Tensor:
         X = tf.ensure_shape(X, [None, self.dimension])
