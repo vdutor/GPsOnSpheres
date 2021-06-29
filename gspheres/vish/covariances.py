@@ -190,4 +190,4 @@ def conditional_vish(
     else:
         fvar = r[..., None] * fvar * r[:, None, :]
 
-    return r * fmean, kernel.variance * fvar
+    return r * fmean, fvar

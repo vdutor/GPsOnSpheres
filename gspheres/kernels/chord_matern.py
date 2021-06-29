@@ -20,7 +20,7 @@ class ChordMatern(gpflow.kernels.Kernel):
         elif nu == 5 / 2:
             self.base_kernel = gpflow.kernels.Matern52()
 
-        self.variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+        # self.variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
         self.bias_variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
         self.weight_variances = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
         self._eigenvalues = {}

@@ -42,7 +42,7 @@ def get_svgp(data):
         num_data=len(data[0]),
         whiten=False,
     )
-    gpflow.utilities.set_trainable(model.likelihood, False)
+    # gpflow.utilities.set_trainable(model.likelihood, False)
 
     opt = gpflow.optimizers.Scipy()
     print(model.trainable_variables)
@@ -90,11 +90,6 @@ if __name__ == "__main__":
     up, lo = [mean + c * var ** 0.5 for c in [1, -1]]
 
     fig.add_trace(go.Surface(x=X_test_1D, y=X_test_1D, z=mean, colorscale="Viridis"), row=1, col=2)
-    fig.add_trace(
-        go.Surface(x=X_test_1D, y=X_test_1D, z=lo, colorscale="Viridis", opacity=0.25), row=1, col=2
-    )
-    fig.add_trace(
-        go.Surface(x=X_test_1D, y=X_test_1D, z=up, colorscale="Viridis", opacity=0.25), row=1, col=2
-    )
-
+    fig.add_trace(go.Surface(x=X_test_1D, y=X_test_1D, z=lo, colorscale="Viridis", opacity=0.25), row=1, col=2)
+    fig.add_trace(go.Surface(x=X_test_1D, y=X_test_1D, z=up, colorscale="Viridis", opacity=0.25), row=1, col=2)
     fig.show()
