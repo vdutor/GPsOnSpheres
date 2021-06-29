@@ -12,7 +12,7 @@ from ..utils import surface_area_sphere
 
 
 class ChordMatern(gpflow.kernels.Kernel):
-    def __init__(self, nu: int, dimension: int):
+    def __init__(self, nu: float, dimension: int):
         if nu == 1 / 2:
             self.base_kernel = gpflow.kernels.Matern12()
         elif nu == 3 / 2:
