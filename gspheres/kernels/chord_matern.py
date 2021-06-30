@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import numpy as np
 import tensorflow as tf
@@ -12,17 +12,30 @@ from ..utils import surface_area_sphere
 
 
 class ChordMatern(gpflow.kernels.Kernel):
-    def __init__(self, nu: float, dimension: int):
+    def __init__(
+        self,
+        nu: float,
+        dimension: int,
+        variance: float = 1.0,
+        weight_variances: Union[float, np.ndarray] = 1.0,
+        bias_variance: float = 1.0,
+        *,
+        name: Optional[str] = None,
+    ):
+        super().__init__(active_dims=None, name=name)
+
         if nu == 1 / 2:
             self.base_kernel = gpflow.kernels.Matern12()
         elif nu == 3 / 2:
             self.base_kernel = gpflow.kernels.Matern32()
         elif nu == 5 / 2:
             self.base_kernel = gpflow.kernels.Matern52()
+        else:
+            raise NotImplementedError("Unknown Matern kernel, use `nu` equal to 1/2, 3/2, 5/2.")
 
-        # self.variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
-        self.bias_variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
-        self.weight_variances = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+        self.variance = gpflow.Parameter(variance, transform=gpflow.utilities.positive())
+        self.bias_variance = gpflow.Parameter(bias_variance, transform=gpflow.utilities.positive())
+        self.weight_variances = gpflow.Parameter(weight_variances, transform=gpflow.utilities.positive())
         self._eigenvalues = {}
         self.dimension = dimension
         # un-parameterise the kernel's lengthscale
@@ -43,18 +56,18 @@ class ChordMatern(gpflow.kernels.Kernel):
                 v = _funk_hecke(self.shape_function_cos_theta, n, self.dimension)
                 values.append(v)
             self._eigenvalues[max_degree] = tf.convert_to_tensor(values)
-        return self._eigenvalues[max_degree]
+        return self.variance * self._eigenvalues[max_degree]
 
     def K(self, X: TensorType, X2: Optional[TensorType] = None) -> tf.Tensor:
         X = tf.ensure_shape(X, [None, self.dimension])
         if X2 is not None:
             X2 = tf.ensure_shape(X2, [None, self.dimension])
-        return self.base_kernel.K(X, X2)
+        return self.variance * self.base_kernel.K(X, X2)
 
     def K_diag(self, X: TensorType) -> tf.Tensor:
         """ Approximate the true kernel by an inner product between feature functions. """
         X = tf.ensure_shape(X, [None, self.dimension])
-        return self.base_kernel.K_diag(X)
+        return self.variance * self.base_kernel.K_diag(X)
 
     def __call__(self, X, X2=None, *, full_cov=True, presliced=False):
         if (not full_cov) and (X2 is not None):
