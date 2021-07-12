@@ -1,6 +1,5 @@
 from typing import Optional, Union
 
-import math
 import numpy as np
 import tensorflow as tf
 from scipy.special import gamma
@@ -15,7 +14,6 @@ from ..gegenbauer_polynomial import Gegenbauer
 
 
 class SphericalMatern(gpflow.kernels.Kernel):
-
     def __init__(
             self,
             nu: float,
@@ -44,7 +42,6 @@ class SphericalMatern(gpflow.kernels.Kernel):
             [num_harmonics(3, d) for d in range(degrees)]
         ).item()
         self.Cs = [Gegenbauer(n, self.alpha) for n in range(self.degrees)]
-
         # self.lengthscales = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
 
         _eigenvals = self.eigenvalues(self.degrees)
@@ -102,7 +99,7 @@ class SphericalMatern(gpflow.kernels.Kernel):
 
         :return: Tensor [N, 1]
         """
-        lengthscale = self.lengthscales
+        lengthscale = 1.0
         D = self.dimension
         nu = self.nu
 

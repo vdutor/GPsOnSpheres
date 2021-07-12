@@ -1,26 +1,14 @@
 import tensorflow as tf
+from gspheres.fundamental_set import num_harmonics
+from gspheres.utils import chain
+from gspheres.vish import SphericalHarmonicFeatures
+
 import gpflow
-from gpflow.inducing_variables import InducingVariables
 from gpflow import covariances as cov
 from gpflow import kullback_leiblers as kl
 from gpflow.base import TensorLike
+from gpflow.inducing_variables import InducingVariables
 from gpflow.utilities import to_default_float
-
-from gspheres.fundamental_set import num_harmonics
-from gspheres.spherical_harmonics import SphericalHarmonics
-from gspheres.utils import chain
-
-
-class SphericalHarmonicFeatures(InducingVariables):
-    """Wraps SphericalHarmonics."""
-    def __init__(self, dimension: int, degrees: int):
-        self.dimension = dimension
-        self.max_degree = degrees
-        self.spherical_harmonics = SphericalHarmonics(dimension, degrees)
-
-    def __len__(self):
-        """Number of inducing variables"""
-        return len(self.spherical_harmonics)
 
 
 @cov.Kuu.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel)
@@ -29,10 +17,9 @@ def Kuu_sphericalharmonicfeatures(
 ):
     """Covariance matrix between spherical harmonic features."""
     eigenvalues_per_level = kernel.eigenvalues(inducing_variable.max_degree)
-    num_harmonics_per_level = tf.convert_to_tensor([
-        num_harmonics(inducing_variable.dimension, n)
-        for n in range(inducing_variable.max_degree)
-    ])
+    num_harmonics_per_level = [
+        num_harmonics(inducing_variable.dimension, n) for n in range(inducing_variable.max_degree)
+    ]
     eigenvalues = chain(eigenvalues_per_level, num_harmonics_per_level)
     return tf.linalg.LinearOperatorDiag(1 / eigenvalues)
 
@@ -43,7 +30,7 @@ def Kuf_sphericalharmonicfeatures(
 ):
     """
     Covariance between spherical harmonic features and function values.
-    
+
     :return: Covariance matrix, shape [Num_features, Num_X].
     """
     return tf.transpose(inducing_variable.spherical_harmonics(X))
@@ -60,14 +47,11 @@ def prior_kl_vish(inducing_variable, kernel, q_mu, q_sqrt, whiten=False):
 def gauss_kl_vish(q_mu, q_sqrt, K):
     """
     Compute the KL divergence from
-
           q(x) = N(q_mu, q_sqrt^2)
     to
           p(x) = N(0, K)
-
     q_mu is a vector [N, 1] that contains the mean.
     q_sqrt is a matrix that is the lower triangular square-root matrix of the covariance of q.
-
     K is a positive definite matrix: the covariance of p.
     NOTE: K is a LinearOperator that provides efficient methjods
         for solve(), log_abs_determinant(), and trace()
@@ -86,8 +70,7 @@ def gauss_kl_vish(q_mu, q_sqrt, K):
     num_latent_gps = to_default_float(tf.shape(q_mu)[1])
     logdet_prior = num_latent_gps * K.log_abs_determinant()
 
-    product_of_dimensions__int = tf.reduce_prod(
-        tf.shape(q_sqrt)[:-1])  # dimensions are integers
+    product_of_dimensions__int = tf.reduce_prod(tf.shape(q_sqrt)[:-1])  # dimensions are integers
     constant_term = to_default_float(product_of_dimensions__int)
 
     Lq = tf.linalg.band_part(q_sqrt, -1, 0)  # force lower triangle
@@ -125,16 +108,25 @@ def conditional_vish(
      - q_sqrt (default None) is the Cholesky factor of the uncertainty about f
        (to be propagated through the conditional as per the GPflow inducing-point implementation)
      - white (defaults False) specifies whether the whitening has been applied
-
     Given the GP represented by the inducing points specified in `feat`, produce the mean and
     (co-)variance of the GP at the points Xnew.
-
        Xnew :: N x D
        Kuu :: M x M
        Kuf :: M x N
        f :: M x K, K = 1
        q_sqrt :: K x M x M, with K = 1
     """
+    tf.ensure_shape(Xnew, [None, kernel.dimension - 1])
+    Xnew = tf.concat(
+        [
+            (kernel.weight_variances ** 0.5) * Xnew,
+            (kernel.bias_variance ** 0.5) * tf.ones_like(Xnew[:, :1]),
+        ],
+        axis=1,
+    )
+    r = tf.linalg.norm(Xnew, axis=1, keepdims=True)
+    Xnew = Xnew / r
+
     if full_output_cov:
         raise NotImplementedError
 
@@ -193,4 +185,9 @@ def conditional_vish(
             fvar = fvar + tf.reduce_sum(tf.square(ATL), 2)  # K x N
     fvar = tf.transpose(fvar)  # N x K or N x N x K
 
-    return fmean, fvar
+    if not full_cov:
+        fvar = r ** 2 * fvar
+    else:
+        fvar = r[..., None] * fvar * r[:, None, :]
+
+    return r * fmean, fvar
