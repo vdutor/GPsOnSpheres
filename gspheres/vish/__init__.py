@@ -1,92 +1,129 @@
-import math
-from typing import Union, Generic, TypeVar
+from typing import Union
 import numpy as np
 import tensorflow as tf
-from gpflow.models import SVGP, SGPR
+from gpflow import default_float, default_jitter
+from gpflow.utilities import to_default_float
+from gpflow.utilities.utilities import parameter_dict
+from gpflow.covariances.dispatch import Kuf, Kuu
+from gpflow.models import SGPR
 from gpflow.models.model import MeanAndVariance
 from gpflow.models.training_mixins import InputData
 
-from gspheres.vish.eigenfunction_variables import SphericalHarmonicFeatures
-from gspheres.vish.mixed_variables import MixedFeatures
 
-
-def map_to_sphere(X: np.ndarray, bias: Union[int, float]) -> np.ndarray:
-    """
-    Append bias to X and map to surface of the unit hypersphere.
-
-    X is [N, D]
-    """
-    Xb = np.concatenate((X, bias * np.ones((*X.shape[:-1], 1))), axis=1)
-    return Xb / np.linalg.norm(Xb, axis=1, keepdims=True)
-
-
-class WsabiLSVGP(SVGP):
-    """SVGP that should be fit to the log transform of the training
-    targets. The unwarping is done by linearisation.
-    """
-    def __init__(self, *args, alpha=0, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.alpha = alpha
-
-    def predict_unwarped_f(
-            self, Xnew: InputData, full_cov=False, full_output_cov=False
-    ) -> MeanAndVariance:
-        mean, var = self.predict_f(Xnew, full_cov, full_output_cov)
-
-        f_sq_mean = self.alpha + mean ** 2 / 2
-        if full_cov:
-            covar_factors = tf.linalg.matmul(mean, mean, transpose_a=True)
-            f_sq_var = covar_factors * var
-        else:
-            f_sq_var = var * mean ** 2
-
-        return f_sq_mean, f_sq_var
-
-
-class LogMSVGP(SVGP):
-    """SVGP that should be fit to the log transform of the training
-    targets. The unwarping is done by moment matching.
-    """
+class VishGPR(SGPR):
+    """VISH model for regression."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def predict_unwarped_f(
-            self,
-            Xnew: InputData,
-            full_cov=False,
-            full_output_cov=False,
-            log_offset=0
-    ) -> MeanAndVariance:
-        """Make unwarped prediction.
+    def map_to_sphere(
+            self, X: Union[tf.Tensor, tf.Variable]
+    ) -> Union[tf.Tensor, tf.Variable]:
+        """Map data to the surface of a hypersphere.
 
-        log_offset is added to the warped mean before unwarping.
+        Append self.bias to locations so you have points in R^{d+1} and
+        map to hypersphere S^d.
+
+        Uses Tensorflow, so that it can be used for acquisition
+        function optimisation.
+
+        :param X: Points to map onto hypersphere [N, D].
+        :return: Mapped points that lie on the hypersphere [N, D + 1].
         """
-        # Get warped prediction.
-        mean, cov = self.predict_f(Xnew, full_cov, full_output_cov)
-        shifted_mean = mean + log_offset
-        var = tf.linalg.diag_part(cov) if full_cov else cov
-
-        # Compute unwarping.
-        f_exp_mean = tf.exp(shifted_mean + 0.5 * var)
-        if full_cov:
-            covar_factors = tf.linalg.matmul(
-                f_exp_mean, f_exp_mean, transpose_a=True
-            )
-            f_exp_cov = covar_factors * (tf.exp(cov) - 1)
-        else:
-            f_exp_cov = (tf.exp(var) - 1) * f_exp_mean ** 2
-
-        return f_exp_mean, f_exp_cov
-
-    def predict_unwarped_log_variance(self, Xnew: InputData, log_offset=0):
-        """Predictive variance of unwarped function.
-
-        log_offset is added to the warped mean before unwarping.
-        """
-        # Get warped prediction.
-        mean, var = self.predict_f(Xnew, full_cov=False, full_output_cov=False)
-        shifted_mean = mean + log_offset
-        # return log variance
-        return (
-            2 * shifted_mean + var + tf.math.log(tf.exp(var) - 1)
+        Xb = tf.concat(
+            [
+                (self.kernel.weight_variances ** 0.5) * X,
+                (self.kernel.bias_variance ** 0.5) * tf.ones_like(X[:, :1]),
+            ],
+            axis=1
         )
+        return Xb / tf.norm(Xb, axis=1, keepdims=True)
+
+    def elbo(self) -> tf.Tensor:
+        """
+        Construct a tensorflow function to compute the bound on the marginal
+        likelihood.
+
+        This is modified from the super class to work with Kuu of type
+        tf.linalg.LinearOperator.
+        """
+        X_data, Y_data = self.data
+        tf.ensure_shape(X_data, [None, self.kernel.dimension - 1])
+        X_data = self.map_to_sphere(X_data)
+
+        num_inducing = self.inducing_variable.num_inducing
+        num_data = to_default_float(tf.shape(Y_data)[0])
+        output_dim = to_default_float(tf.shape(Y_data)[1])
+
+        err = Y_data - self.mean_function(X_data)
+        Kdiag = self.kernel(X_data, full_cov=False)
+        kuf = Kuf(self.inducing_variable, self.kernel, X_data)
+        kuu = Kuu(self.inducing_variable, self.kernel, jitter=default_jitter())
+        # Cholesky of diagonal matrix.
+        L = tf.linalg.LinearOperatorDiag(kuu.diag_part() ** 0.5)
+        sigma = tf.sqrt(self.likelihood.variance)
+
+        # Compute intermediate matrices
+        A = L.solve(kuf) / sigma
+        AAT = tf.linalg.matmul(A, A, transpose_b=True)
+        B = AAT + tf.eye(num_inducing, dtype=default_float())
+        LB = tf.linalg.cholesky(B)
+        Aerr = tf.linalg.matmul(A, err)
+        c = tf.linalg.triangular_solve(LB, Aerr, lower=True) / sigma
+
+        # compute log marginal bound
+        bound = -0.5 * num_data * output_dim * np.log(2 * np.pi)
+        bound += tf.negative(output_dim) * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LB)))
+        bound -= 0.5 * num_data * output_dim * tf.math.log(self.likelihood.variance)
+        bound += -0.5 * tf.reduce_sum(tf.square(err)) / self.likelihood.variance
+        bound += 0.5 * tf.reduce_sum(tf.square(c))
+        bound += -0.5 * output_dim * tf.reduce_sum(Kdiag) / self.likelihood.variance
+        bound += 0.5 * output_dim * tf.reduce_sum(tf.linalg.diag_part(AAT))
+
+        return bound
+
+    def upper_bound(self) -> tf.Tensor:
+        raise NotImplementedError
+
+    def predict_f(self, Xnew: InputData, full_cov=False, full_output_cov=False) -> MeanAndVariance:
+        """
+        Compute the mean and variance of the latent function at some new points
+        Xnew. For a derivation of the terms in here, see the associated SGPR
+        notebook.
+        """
+        X_data, Y_data = self.data
+        tf.ensure_shape(X_data, [None, self.kernel.dimension - 1])
+        tf.ensure_shape(Xnew, [None, self.kernel.dimension - 1])
+        X_data = self.map_to_sphere(X_data)
+        Xnew = self.map_to_sphere(Xnew)
+
+        num_inducing = self.inducing_variable.num_inducing
+        err = Y_data - self.mean_function(X_data)
+        kuf = Kuf(self.inducing_variable, self.kernel, X_data)
+        kuu = Kuu(self.inducing_variable, self.kernel, jitter=default_jitter())
+        Kus = Kuf(self.inducing_variable, self.kernel, Xnew)
+        sigma = tf.sqrt(self.likelihood.variance)
+        # Cholesky of diagonal matrix.
+        L = tf.linalg.LinearOperatorDiag(kuu.diag_part() ** 0.5)
+        A = L.solve(kuf) / sigma
+        B = tf.linalg.matmul(A, A, transpose_b=True) + tf.eye(num_inducing, dtype=default_float())
+        LB = tf.linalg.cholesky(B)
+        Aerr = tf.linalg.matmul(A, err)
+        c = tf.linalg.triangular_solve(LB, Aerr, lower=True) / sigma
+        tmp1 = L.solve(Kus)
+        tmp2 = tf.linalg.triangular_solve(LB, tmp1, lower=True)
+        mean = tf.linalg.matmul(tmp2, c, transpose_a=True)
+        if full_cov:
+            var = (
+                self.kernel(Xnew)
+                + tf.linalg.matmul(tmp2, tmp2, transpose_a=True)
+                - tf.linalg.matmul(tmp1, tmp1, transpose_a=True)
+            )
+            var = tf.tile(var[None, ...], [self.num_latent_gps, 1, 1])  # [P, N, N]
+        else:
+            var = (
+                self.kernel(Xnew, full_cov=False)
+                + tf.reduce_sum(tf.square(tmp2), 0)
+                - tf.reduce_sum(tf.square(tmp1), 0)
+            )
+            var = tf.tile(var[:, None], [1, self.num_latent_gps])
+        return mean + self.mean_function(Xnew), var

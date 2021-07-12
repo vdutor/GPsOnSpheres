@@ -24,10 +24,8 @@ class SphericalHarmonicFeatures(InducingVariables):
 
 
 @cov.Kuu.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel)
-def Kuu_sphericalmatern_sphericalharmonicfeatures(
-        inducing_variable: SphericalHarmonicFeatures,
-        kernel: gpflow.kernels.Kernel,
-        jitter=None
+def Kuu_sphericalharmonicfeatures(
+    inducing_variable: SphericalHarmonicFeatures, kernel: gpflow.kernels.Kernel, jitter=None
 ):
     """Covariance matrix between spherical harmonic features."""
     eigenvalues_per_level = kernel.eigenvalues(inducing_variable.max_degree)
@@ -40,10 +38,8 @@ def Kuu_sphericalmatern_sphericalharmonicfeatures(
 
 
 @cov.Kuf.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel, TensorLike)
-def Kuf_sphericalmatern_sphericalharmonicfeatures(
-        inducing_variable: SphericalHarmonicFeatures,
-        kernel: gpflow.kernels.Kernel,
-        X: TensorLike
+def Kuf_sphericalharmonicfeatures(
+    inducing_variable: SphericalHarmonicFeatures, kernel: gpflow.kernels.Kernel, X: TensorLike
 ):
     """
     Covariance between spherical harmonic features and function values.

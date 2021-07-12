@@ -15,7 +15,15 @@ from ..gegenbauer_polynomial import Gegenbauer
 
 
 class SphericalMatern(gpflow.kernels.Kernel):
-    def __init__(self, nu: float, degrees: int, dimension: int):
+
+    def __init__(
+            self,
+            nu: float,
+            degrees: int,
+            dimension: int,
+            weight_variances: Union[float, np.ndarray] = 1.0,
+            bias_variance: float = 1.0,
+    ):
         """
         :param degrees: Max degree for spherical harmonics.
         :param dimension: S^{d-1}, R^d with d = dimension
@@ -29,16 +37,15 @@ class SphericalMatern(gpflow.kernels.Kernel):
         self.dimension = dimension
         self.alpha = (dimension - 2) / 2
         self.nu = nu
-        self.spherical_harmonics = SphericalHarmonics(
-            dimension=dimension, degrees=degrees
-        )
+
         # Truncation level is number of spherical harmonics.
         self.degrees = degrees
         self.truncation_level = np.sum(
             [num_harmonics(3, d) for d in range(degrees)]
         ).item()
         self.Cs = [Gegenbauer(n, self.alpha) for n in range(self.degrees)]
-        self.lengthscales = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+
+        # self.lengthscales = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
 
         _eigenvals = self.eigenvalues(self.degrees)
         self.constants = tf.convert_to_tensor(
@@ -54,6 +61,9 @@ class SphericalMatern(gpflow.kernels.Kernel):
             ]
         )  # scalar
         self.variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+        self.bias_variance = gpflow.Parameter(bias_variance, transform=gpflow.utilities.positive())
+        self.weight_variances = gpflow.Parameter(weight_variances,
+                                                 transform=gpflow.utilities.positive())
 
     def eigenvalues(self, max_degree: int):
         ns = tf.convert_to_tensor(np.arange(max_degree), dtype=gpflow.default_float())
