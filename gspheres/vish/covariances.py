@@ -12,7 +12,7 @@ from gpflow.utilities import to_default_float
 
 
 @cov.Kuu.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel)
-def Kuu_sphericalmatern_sphericalharmonicfeatures(
+def Kuu_sphericalharmonicfeatures(
     inducing_variable: SphericalHarmonicFeatures, kernel: gpflow.kernels.Kernel, jitter=None
 ):
     """Covariance matrix between spherical harmonic features."""
@@ -25,7 +25,7 @@ def Kuu_sphericalmatern_sphericalharmonicfeatures(
 
 
 @cov.Kuf.register(SphericalHarmonicFeatures, gpflow.kernels.Kernel, TensorLike)
-def Kuf_sphericalmatern_sphericalharmonicfeatures(
+def Kuf_sphericalharmonicfeatures(
     inducing_variable: SphericalHarmonicFeatures, kernel: gpflow.kernels.Kernel, X: TensorLike
 ):
     """

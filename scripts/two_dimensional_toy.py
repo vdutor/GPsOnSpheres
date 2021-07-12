@@ -1,16 +1,20 @@
-import gspheres
-import matplotlib.pyplot as plt
+from typing import Union
 import numpy as np
-import plotly.graph_objects as go
 import scipy
+import tensorflow as tf
+from tensorflow.python.ops.variables import trainable_variables
+import gpflow
+from gpflow.covariances import Kuu, Kuf
+import gspheres
 from gspheres.fundamental_set import num_harmonics
 from gspheres.kernels.chord_matern import ChordMatern
 from gspheres.kernels.spherical_matern import SphericalMatern
+from gspheres.kernels.truncated_chord_matern import TruncatedChordMatern
+from gspheres.vish import VishGPR
 from gspheres.vish.covariances import SphericalHarmonicFeatures
+import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from tensorflow.python.ops.variables import trainable_variables
-
-import gpflow
+import matplotlib.pyplot as plt
 
 
 def get_data(num_data=100):
@@ -24,7 +28,7 @@ def get_data(num_data=100):
 
 def get_svgp(data):
     max_degree = 5
-    kernel = ChordMatern(nu=0.5, dimension=3, bias_variance=1, weight_variances=[1.0, 1.0])
+    kernel = TruncatedChordMatern(nu=0.5, dimension=3, bias_variance=1, weight_variances=[1.0, 1.0])
     _ = kernel.eigenvalues(max_degree)
     model = gpflow.models.SVGP(
         kernel=kernel,
@@ -38,9 +42,25 @@ def get_svgp(data):
     return model
 
 
+def get_sgpr(data):
+    max_degree = 5
+    kernel = TruncatedChordMatern(nu=0.5, dimension=3, bias_variance=1, weight_variances=[1.0, 1.0])
+    _ = kernel.eigenvalues(max_degree)
+    model = VishGPR(
+        data=data,
+        kernel=kernel,
+        inducing_variable=SphericalHarmonicFeatures(dimension=3, degrees=max_degree),
+        noise_variance=0.01,
+    )
+    opt = gpflow.optimizers.Scipy()
+    opt.minimize(model.training_loss_closure(), model.trainable_variables)
+    return model
+
+
 if __name__ == "__main__":
     X, Y = get_data()
-    model = get_svgp((X, Y))
+    # model = get_svgp((X, Y))
+    model = get_sgpr((X, Y))
 
     N_test = 20
     X_test_1D = np.linspace(-3, 3, N_test)
