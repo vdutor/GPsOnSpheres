@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import numpy as np
 import tensorflow as tf
@@ -12,16 +12,35 @@ from ..utils import surface_area_sphere
 
 
 class ChordMatern(gpflow.kernels.Kernel):
-    def __init__(self, nu: int, dimension: int):
+    def __init__(
+        self,
+        nu: float,
+        dimension: int,
+        variance: float = 1.0,
+        weight_variances: Union[float, np.ndarray] = 1.0,
+        bias_variance: float = 1.0,
+        *,
+        name: Optional[str] = None,
+    ):
+        super().__init__(active_dims=None, name=name)
+
         if nu == 1 / 2:
             self.base_kernel = gpflow.kernels.Matern12()
         elif nu == 3 / 2:
             self.base_kernel = gpflow.kernels.Matern32()
         elif nu == 5 / 2:
             self.base_kernel = gpflow.kernels.Matern52()
+        else:
+            raise NotImplementedError("Unknown Matern kernel, use `nu` equal to 1/2, 3/2, 5/2.")
 
+        self.variance = gpflow.Parameter(variance, transform=gpflow.utilities.positive())
+        self.bias_variance = gpflow.Parameter(bias_variance, transform=gpflow.utilities.positive())
+        self.weight_variances = gpflow.Parameter(weight_variances, transform=gpflow.utilities.positive())
+        self._eigenvalues = {}
         self.dimension = dimension
+        # un-parameterise the kernel's lengthscale
         self.base_kernel.lengthscales = 1.0
+        self.base_kernel.variance = tf.cast(1.0, gpflow.config.default_float())
 
     def shape_function_cos_theta(self, t: TensorType) -> TensorType:
         r"""
@@ -31,22 +50,34 @@ class ChordMatern(gpflow.kernels.Kernel):
         return self.base_kernel.K_r2(tf.cast(r2, tf.float64))
 
     def eigenvalues(self, max_degree: int) -> tf.Tensor:
-        values = []
-        for n in range(max_degree):
-            v = _funk_hecke(self.shape_function_cos_theta, n, self.dimension)
-            values.append(v)
-        return tf.convert_to_tensor(values)
-
-    @property
-    def variance(self):
-        return self.base_kernel.variance
+        if max_degree not in self._eigenvalues:
+            values = []
+            for n in range(max_degree):
+                v = _funk_hecke(self.shape_function_cos_theta, n, self.dimension)
+                values.append(v)
+            self._eigenvalues[max_degree] = tf.convert_to_tensor(values)
+        return self.variance * self._eigenvalues[max_degree]
 
     def K(self, X: TensorType, X2: Optional[TensorType] = None) -> tf.Tensor:
-        return self.base_kernel.K(X, X2)
+        X = tf.ensure_shape(X, [None, self.dimension])
+        if X2 is not None:
+            X2 = tf.ensure_shape(X2, [None, self.dimension])
+        return self.variance * self.base_kernel.K(X, X2)
 
     def K_diag(self, X: TensorType) -> tf.Tensor:
         """ Approximate the true kernel by an inner product between feature functions. """
-        return self.base_kernel.K_diag(X)
+        X = tf.ensure_shape(X, [None, self.dimension])
+        return self.variance * self.base_kernel.K_diag(X)
+
+    def __call__(self, X, X2=None, *, full_cov=True, presliced=False):
+        if (not full_cov) and (X2 is not None):
+            raise ValueError("Ambiguous inputs: `not full_cov` and `X2` are not compatible.")
+
+        if not full_cov:
+            assert X2 is None
+            return self.K_diag(X)
+        else:
+            return self.K(X, X2)
 
 
 def _funk_hecke(shape_function: Callable[[float], float], n: int, dim: int) -> float:

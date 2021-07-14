@@ -16,6 +16,8 @@ class SphericalMatern(gpflow.kernels.Kernel):
         """
         :param dimension: S^{d-1}, R^d with d = dimension
         """
+        raise NotImplementedError
+
         assert nu in [1 / 2, 3 / 2, 5 / 2]
         assert dimension == 3
 
