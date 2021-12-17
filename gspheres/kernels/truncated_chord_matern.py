@@ -2,11 +2,13 @@ from typing import Callable, Optional, Union
 
 import numpy as np
 import tensorflow as tf
+import tensorflow_probability as tfp
 from scipy import integrate
 from scipy.special import gegenbauer as scipy_gegenbauer
 
 import gpflow
 from gpflow.base import TensorType
+from gpflow import default_float
 
 from gspheres.spherical_harmonics import SphericalHarmonics
 from ..fundamental_set import num_harmonics
@@ -21,8 +23,11 @@ class TruncatedChordMatern(gpflow.kernels.Kernel):
         dimension: int,
         degrees: int = 12,
         variance: float = 1.0,
+        variance_constraint: tfp.bijectors.Bijector = gpflow.utilities.positive(),
         weight_variances: Union[float, np.ndarray] = 1.0,
+        weight_variances_constraint: tfp.bijectors.Bijector = gpflow.utilities.positive(),
         bias_variance: float = 1.0,
+        bias_variance_constraint: tfp.bijectors.Bijector = gpflow.utilities.positive(),
         *,
         name: Optional[str] = None,
     ):
@@ -43,10 +48,15 @@ class TruncatedChordMatern(gpflow.kernels.Kernel):
         self.dimension = dimension
         self.alpha = (dimension - 2) / 2
 
-        self.variance = gpflow.Parameter(variance, transform=gpflow.utilities.positive())
-        self.bias_variance = gpflow.Parameter(bias_variance, transform=gpflow.utilities.positive())
-        self.weight_variances = gpflow.Parameter(weight_variances,
-                                                 transform=gpflow.utilities.positive())
+        self.variance = gpflow.Parameter(
+            variance, transform=variance_constraint
+        )
+        self.bias_variance = gpflow.Parameter(
+            bias_variance, transform=bias_variance_constraint
+        )
+        self.weight_variances = gpflow.Parameter(
+            weight_variances, transform=weight_variances_constraint
+        )
         # un-parameterise the kernel's lengthscale
         self.base_kernel.lengthscales = 1.0
         self.base_kernel.variance = tf.cast(1.0, gpflow.config.default_float())
@@ -90,6 +100,7 @@ class TruncatedChordMatern(gpflow.kernels.Kernel):
                 ]
             )  # scalar
         return self.variance * self._eigenvalues[max_degree]
+        # return self._eigenvalues[max_degree]
 
     def evaluate_gegenbauers(self, X: TensorType):
         """ X: [...], return [L, ...] """
@@ -100,6 +111,8 @@ class TruncatedChordMatern(gpflow.kernels.Kernel):
         X = tf.ensure_shape(X, [None, self.dimension])
         if X2 is not None:
             X2 = tf.ensure_shape(X2, [None, self.dimension])
+        else:
+            X2 = X
         inner_product = tf.matmul(X, X2, transpose_b=True)  # [N1, N2]
         C = self.evaluate_gegenbauers(inner_product)  # [L, N1, N2]
         value = tf.reduce_sum(self.constants[self.degrees][:, None, None] * C, axis=0)  # [N1, N2]
