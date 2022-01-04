@@ -19,7 +19,9 @@ class VishGPR(SGPR):
         super().__init__(*args, **kwargs)
 
     def map_to_sphere(
-            self, X: Union[tf.Tensor, tf.Variable]
+            self,
+            X: Union[tf.Tensor, tf.Variable],
+            Y: Union[tf.Tensor, tf.Variable] = None
     ) -> Union[tf.Tensor, tf.Variable]:
         """Map data to the surface of a hypersphere.
 
@@ -30,7 +32,10 @@ class VishGPR(SGPR):
         function optimisation.
 
         :param X: Points to map onto hypersphere [N, D].
-        :return: Mapped points that lie on the hypersphere [N, D + 1].
+        :param Y: Corresponding Y values, if avaliable [N].
+        :return: Mapped points that lie on the hypersphere [N, D + 1], along
+            with either the Norms used to map onto the hypersphere, or the
+            Y values divided by the norms.
         """
         Xb = tf.concat(
             [
@@ -39,7 +44,12 @@ class VishGPR(SGPR):
             ],
             axis=1
         )
-        return Xb / tf.norm(Xb, axis=1, keepdims=True)
+        X_norm = tf.norm(Xb, axis=1, keepdims=True)
+        X_sphere = Xb / X_norm
+        if Y is None:
+            return X_sphere, X_norm
+        else:
+            return X_sphere, Y / X_norm
 
     def elbo(self) -> tf.Tensor:
         """
@@ -51,7 +61,7 @@ class VishGPR(SGPR):
         """
         X_data, Y_data = self.data
         tf.ensure_shape(X_data, [None, self.kernel.dimension - 1])
-        X_data = self.map_to_sphere(X_data)
+        X_data, Y_data = self.map_to_sphere(X_data, Y_data)
 
         num_inducing = self.inducing_variable.num_inducing
         num_data = to_default_float(tf.shape(Y_data)[0])
@@ -96,8 +106,8 @@ class VishGPR(SGPR):
         X_data, Y_data = self.data
         tf.ensure_shape(X_data, [None, self.kernel.dimension - 1])
         tf.ensure_shape(Xnew, [None, self.kernel.dimension - 1])
-        X_data = self.map_to_sphere(X_data)
-        Xnew = self.map_to_sphere(Xnew)
+        X_data, Y_data = self.map_to_sphere(X_data, Y_data)
+        Xnew, Xnew_norm = self.map_to_sphere(Xnew)
 
         num_inducing = self.inducing_variable.num_inducing
         err = Y_data - self.mean_function(X_data)
@@ -114,7 +124,7 @@ class VishGPR(SGPR):
         c = tf.linalg.triangular_solve(LB, Aerr, lower=True) / sigma
         tmp1 = L.solve(Kus)
         tmp2 = tf.linalg.triangular_solve(LB, tmp1, lower=True)
-        mean = tf.linalg.matmul(tmp2, c, transpose_a=True)
+        mean = tf.linalg.matmul(tmp2, c, transpose_a=True) + self.mean_function(Xnew)
         if full_cov:
             var = (
                 self.kernel(Xnew)
@@ -122,6 +132,7 @@ class VishGPR(SGPR):
                 - tf.linalg.matmul(tmp1, tmp1, transpose_a=True)
             )
             var = tf.tile(var[None, ...], [self.num_latent_gps, 1, 1])  # [P, N, N]
+            var = (Xnew_norm @ tf.transpose(Xnew_norm)) * var
         else:
             var = (
                 self.kernel(Xnew, full_cov=False)
@@ -129,4 +140,5 @@ class VishGPR(SGPR):
                 - tf.reduce_sum(tf.square(tmp1), 0)
             )
             var = tf.tile(var[:, None], [1, self.num_latent_gps])
-        return mean + self.mean_function(Xnew), var
+            var = Xnew_norm ** 2 * var
+        return mean, var
