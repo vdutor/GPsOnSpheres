@@ -6,43 +6,65 @@ from scipy.special import gamma
 
 import gpflow
 from gpflow.base import TensorType
+from gpflow import covariances as cov
 
+from gspheres.spherical_harmonics import SphericalHarmonics
 from ..fundamental_set import num_harmonics
 from ..gegenbauer_polynomial import Gegenbauer
 
 
 class SphericalMatern(gpflow.kernels.Kernel):
-    def __init__(self, nu: float, truncation_level: int, dimension: int):
+    def __init__(
+            self,
+            nu: float,
+            degrees: int,
+            dimension: int,
+            weight_variances: Union[float, np.ndarray] = 1.0,
+            bias_variance: float = 1.0,
+    ):
         """
+        :param degrees: Max degree for spherical harmonics.
         :param dimension: S^{d-1}, R^d with d = dimension
         """
         assert nu in [1 / 2, 3 / 2, 5 / 2]
         assert dimension == 3
 
+        super().__init__()
+
         self.normalisation_constant = 40.0
         self.dimension = dimension
         self.alpha = (dimension - 2) / 2
         self.nu = nu
-        self.truncation_level = truncation_level  # = L
-        self.Cs = [Gegenbauer(n, self.alpha) for n in range(self.truncation_level)]
 
-        _eigenvals = self.eigenvalues(self.truncation_level)
+        # Truncation level is number of spherical harmonics.
+        self.degrees = degrees
+        self.truncation_level = np.sum(
+            [num_harmonics(3, d) for d in range(degrees)]
+        ).item()
+        self.Cs = [Gegenbauer(n, self.alpha) for n in range(self.degrees)]
+        # self.lengthscales = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+
+        _eigenvals = self.eigenvalues(self.degrees)
         self.constants = tf.convert_to_tensor(
             [
                 eigenvalue * (n + self.alpha) / self.alpha
-                for eigenvalue, n in zip(_eigenvals, range(self.truncation_level))
+                for eigenvalue, n in zip(_eigenvals, range(self.degrees))
             ]
         )  # [L]
         self.diag = tf.reduce_sum(
             [
                 num_harmonics(self.dimension, n) * eigenvalue
-                for eigenvalue, n in zip(_eigenvals, range(self.truncation_level))
+                for eigenvalue, n in zip(_eigenvals, range(self.degrees))
             ]
         )  # scalar
         self.variance = gpflow.Parameter(1.0, transform=gpflow.utilities.positive())
+        self.bias_variance = gpflow.Parameter(bias_variance, transform=gpflow.utilities.positive())
+        self.weight_variances = gpflow.Parameter(weight_variances,
+                                                 transform=gpflow.utilities.positive())
 
     def eigenvalues(self, max_degree: int):
         ns = tf.convert_to_tensor(np.arange(max_degree), dtype=gpflow.default_float())
+        # Eigenvalues of the Laplace-Beltrami operator.
         eigenvalues_harmonics = tf.convert_to_tensor(ns * (ns + self.dimension - 2))  # [L]
         return (
             self.spectral_density(eigenvalues_harmonics ** 0.5) / self.normalisation_constant
